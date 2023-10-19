@@ -8,9 +8,11 @@ Ultimately a generalized, reliable, real world positional recovery of rope suspe
 For now, however, it is a learning project.
 
 1 Grid Search for non-rotating cubes
+
 The very first approach to get familiar with the simplified problem and a possible solution.
 Uses a least square error approach to iteratively find the best fit solution.
 
 2.1 Empty Search for cornerless cubes
+
 In a second step the dependence of the first algorithm on the knowledge of the corner position was targeted.
 Generalizes the cube to a sphere that fills the room between the ropes.
