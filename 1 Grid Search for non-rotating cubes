@@ -1,3 +1,108 @@
+"""
 In a first step towards a soultion a stationary cube in a room is considered.
 Cube size = 80x80x80
 Room size = 1000x1000x1000
+The room is considered to exist along a coordinate system with (500,500,500) being the center and (0,0,0) being the left lower corner.
+The search algorithm creates a point grid in the room surrounding the cube and selects the point with the least squared error.
+In an iterative sequence the grid is shrunk to the desired accuracy.
+Considering a 10mx10mx10m room size and perfect measurements everywhere there is no limit to the achievable accuracy.
+The output is set to have a summed absolute error over all three coordinates of the calculated center point versus the orignial of less than 0.05, which would translate to less than 0.5 mm.
+"""
+
+import math
+import numpy as np
+from matplotlib import pyplot as plt
+
+#Define room size
+room_size = (1000,1000,1000)
+
+#Define cube size
+cube_size = (80,80,80)
+
+# Create random points in the room
+points = [np.random.uniform(50,951,3) for x in range(100)]
+
+# Define the coordinates of the eight corners of the room
+corners = [(0, 0, 0), (1000, 0, 0), (1000, 1000, 0), (0, 1000, 0),
+           (0, 0, 1000), (1000, 0, 1000), (1000, 1000, 1000), (0, 1000, 1000)]
+
+ref_d = []
+#find the corner distances and save them as reference
+for point in points:
+    # calculate the actual position of the corners of the box
+    b_c = [(point[0]-40, point[1]-40, point[2]-40), (point[0]+40, point[1]-40, point[2]-40), 
+              (point[0]+40, point[1]+40, point[2]-40), (point[0]-40, point[1]+40, point[2]-40), 
+              (point[0]-40, point[1]-40, point[2]+40), (point[0]+40, point[1]-40, point[2]+40), 
+              (point[0]+40, point[1]+40, point[2]+40), (point[0]-40, point[1]+40, point[2]+40)]
+
+    # Calculate the distance between the respective corners of the box and room
+    ref_d.append([math.dist(b_c[corners.index(x)],x) for x in corners])
+
+# The search starts in the center of the room
+init_guess = (500,500,500)
+
+# The search algorithm 
+def grid_search(x,y,z,dist,gridlim):
+    
+    v1 = np.linspace(x-gridlim, x+gridlim,10)
+    v2 = np.linspace(y-gridlim, y+gridlim,10)
+    v3 = np.linspace(z-gridlim, z+gridlim,10)
+
+    xv1, yv1, zv1 = np.meshgrid(v1,v2,v3)    
+    grid_list = [[[(xv1[a][b][c],yv1[a][b][c],zv1[a][b][c]) for a in range(0,10)] for b in range(0,10)] for c in range(0,10)]
+    
+    #find best y
+    stable_xz = grid_list[4][4]+grid_list[5][5]
+    eval_y = [corner_dist(x[0], x[1], x[2], dist) for x in stable_xz]
+    loc_y = np.where(np.array(eval_y)==np.array(eval_y).min())
+    coord_y = stable_xz[loc_y[0][0]]
+    new_y = coord_y[1]
+
+    #find best x where best y is
+    stable_z = [list(filter(lambda n_y: n_y[1] == new_y, group)) for group in grid_list[4]+grid_list[5]]
+    flat_z = [item for sublist in stable_z for item in sublist]
+    eval_x = [corner_dist(x[0], x[1], x[2], dist) for x in flat_z]
+    loc_x = np.where(np.array(eval_x)==np.array(eval_x).min())
+    coord_x = flat_z[loc_x[0][0]]
+    new_x = coord_x[0]
+    
+    #find best z with x and y given
+    open_z = [[list(filter(lambda n: n[0] == new_x and n[1] == new_y, subgroup)) for subgroup in group] for group in grid_list]
+    flat_open = [item[0] for sublist in open_z for item in sublist if item !=[]]  
+    eval_z = [corner_dist(x[0], x[1], x[2], dist) for x in flat_open]
+    loc_z = np.where(np.array(eval_z)==np.array(eval_z).min())
+    coord_z = flat_open[loc_z[0][0]]
+    new_z = coord_z[2]
+    #print(new_x,new_y,new_z)
+
+    
+    return new_x,new_y,new_z
+
+#least-squared error calculation
+def corner_dist(x,y,z,dist):
+    c_s = cube_size[0]/2
+    point = [[x-c_s,y-c_s,z-c_s],[x+c_s,y-c_s,z-c_s],[x+c_s,y+c_s,z-c_s],[x-c_s,y+c_s,z-c_s],
+             [x-c_s,y-c_s,z+c_s],[x+c_s,y-c_s,z+c_s],[x+c_s,y+c_s,z+c_s],[x-c_s,y+c_s,z+c_s]]
+    distances = dist
+    relative_dist = sum([(math.dist(point[c],corners[c])-distances[c])**2 for c in range(0,8)])
+    return relative_dist
+
+ERR = [] 
+zoom = 10
+decrease = 2.5
+# accuracy and speed are balanced between the shrinkage in grid size (decrease) and the number of iterations (zoom)  
+for run in range(0,len(ref_d)):
+    dist_list = ref_d[run]
+    c = points[run]
+    error=[]
+  
+    coord= (500,500,500)
+    gridlim=450
+    for t in range(0,zoom):
+        coord = grid_search(coord[0],coord[1],coord[2],dist_list,gridlim)
+        gridlim = gridlim/decrease
+    error.append(sum(abs(np.array(coord)-np.array(c))))
+
+    ERR.append(sum(error))
+    
+plt.plot(range(0,len(ERR)),ERR, color= 'purple')
