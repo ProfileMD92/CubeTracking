@@ -1,0 +1,199 @@
+2.1 Empty Search for cornerless cubes
+# -*- coding: utf-8 -*-
+"""
+Created on Fri Nov  3 07:59:03 2023
+
+@author: e-mndy
+"""
+
+import math
+import numpy as np
+from datetime import datetime
+import matplotlib.pyplot as plt
+from scipy.optimize import minimize
+
+
+def make_points(base, seed):
+    np.random.seed(seed)
+    # Define the coordinates of the point in 3D space
+    points = [np.random.uniform(50,951,3) for x in range(base)]
+    points = sorted(points, key = lambda x: x[0])
+    
+    z=0
+    for x in points[:-1]:
+        z+=1
+        y= points[z]
+        ad = list(zip(np.linspace(x[0], y[0], 10),
+                      np.linspace(x[1], y[1], 10),
+                      np.linspace(x[2], y[2], 10)))
+        points += ad[1:-1]
+    
+    points = [np.array(x) for x in points]
+    points = sorted(points, key = lambda x: x[0]) 
+    return points
+
+
+def get_data(points):
+    t=[]
+    ref_p = []
+    b_corner =[]
+    for poi in range(len(points)):
+        point = points[poi]
+        box1_corner = [point[0]-40, point[1]-40, point[2]-40, point[0]+40, point[1]-40, point[2]-40, 
+                  point[0]+40, point[1]+40, point[2]-40, point[0]-40, point[1]+40, point[2]-40, 
+                  point[0]-40, point[1]-40, point[2]+40, point[0]+40, point[1]-40, point[2]+40, 
+                  point[0]+40, point[1]+40, point[2]+40, point[0]-40, point[1]+40, point[2]+40]
+    
+        #rotate_box!
+        #theta input in degrees transformed to radians
+        theta_x = np.random.uniform(-10,10)
+        theta_y = np.random.uniform(-10,10)
+        theta_z = np.random.uniform(-5,5)
+        t.append([theta_x,theta_y,theta_z])
+        
+        box1_corner.extend(point)
+        box_corner=rotate(box1_corner,theta_x,theta_y,theta_z)
+        box_corner=[(box_corner[x-3:x]) for x in range(3,25,3)]
+
+        #continue normal
+        b_corner.append(box_corner)
+        # Define the coordinates of the eight corners of the cube
+        corners = [(0, 0, 0), (1000, 0, 0), (1000, 1000, 0), (0, 1000, 0),
+                   (0, 0, 1000), (1000, 0, 1000), (1000, 1000, 1000), (0, 1000, 1000)]
+        
+        # Calculate and print the distance to each corner
+        reference_points = []
+        for corner in corners:
+            distance = math.dist(box_corner[corners.index(corner)],corner)
+            reference_points.append([*corner, distance])
+        reference_points.append(theta_x)
+        reference_points.append(theta_y)
+        reference_points.append(theta_z)
+        ref_p.append(reference_points)
+    return ref_p, b_corner, t
+
+
+def rotate(points,tx,ty,tz, reverse = False):
+    #theta input in degrees transformed to radians
+    cos_x,sin_x = np.cos(math.radians(tx)), np.sin(math.radians(tx))
+    cos_y,sin_y = np.cos(math.radians(ty)), np.sin(math.radians(ty))
+    cos_z,sin_z = np.cos(math.radians(tz)), np.sin(math.radians(tz))
+        
+    #transformation matrices for rotation around respective axis
+    r_on_z = np.array([[cos_z, -sin_z,0],[sin_z,cos_z,0],[0,0,1]])
+    r_on_y = np.array([[cos_y, 0, sin_y],[0,1,0],[-sin_y,0,cos_y]])
+    r_on_x = np.array([(1,0,0),(0,cos_x, -sin_x),(0,sin_x,cos_x)])
+    
+    if reverse == True:
+        point=[]
+        center = np.array(points[-3:])
+        for p in range(3,25,3):
+            point.extend(np.dot(r_on_z,np.dot(r_on_y,np.dot(r_on_x,np.array(points[p-3:p])-center)))+center)
+        point.extend(center)
+    else:
+        point=[]
+        center = np.array(points[-3:])
+        for p in range(3,25,3):
+            point.extend(np.dot(r_on_x,np.dot(r_on_y,np.dot(r_on_z,np.array(points[p-3:p])-center)))+center)
+        point.extend(center)
+        
+    return point
+
+
+# Define the objective function to minimize
+def objective_function(point, references): 
+    
+    error = 0 
+    p_rotated = rotate(point, -references[-3], -references[-2], -references[-1],reverse= True)
+    #check box distances
+    for group in range(3,25,3):
+        p1 = point[group-3:group]
+        
+        #check cube rotation
+        p1_r = np.array(p_rotated[group-3:group])
+        newp = p1_r - np.array(point[-3:])
+        error += (sum(abs(newp))-120)**2
+        
+        #check box corner to room corner distance
+        d = references[int((group-3)/3)][3]
+        corner = references[int((group-3)/3)][:3]
+        error += (math.dist(corner,p1)-d)**2
+        
+        #distance between box corner and box center
+        error += (math.dist(p1,point[-3:])-math.dist([0,0,0],[40,40,40]))**2
+        
+        #distance between box corner points
+        for comb in range(group+3,25,3):
+            p_next = point[comb-3:comb]
+            ordr = order[int((group-3)/3)]    
+            o=ordr[int((comb-group-3)/3)]
+            error += (round(math.dist(p1,p_next),10)-o)**2
+        
+    return error
+
+#'-------------------------------start----------------------------------------'
+points = make_points(10,1)
+data = get_data(points)
+ref_p, b_corner, t = data[0], data[1], data[2]
+
+#possible distances between corner points
+d1 = round(math.dist([0,0,0],[80,0,0]), 10)
+d2 = round(math.dist([0,0,0],[80,80,0]), 10)
+d3 = round(math.dist([0,0,0],[80,80,80]), 10)
+
+#order of distances between corner points 
+order=[[d1,d2,d1,d1,d2,d3,d2],[d1,d2,d2,d1,d2,d3],[d1,d3,d2,d1,d2],[d2,d3,d2,d1],[d1,d2,d1],[d1,d2],[d1]]
+
+start = datetime.now()
+c1_error= []
+winners =[]
+turn=0
+pre_pre = [500]*27
+previous = list(np.random.uniform(50,950,27))
+
+for p in range(len(points)):
+    if turn in range(0,2001,10):
+        print(turn)
+        print(datetime.now()-start)
+        start = datetime.now()
+    
+    ig_all = [np.array(previous)+(np.array(previous)-np.array(pre_pre)), 
+              previous, pre_pre,
+              [500]*27, [0]*27, 
+              [1000,0,0]*9, [1000,1000,0]*9, 
+              [0,1000,0]*9, [0,0,1000]*9,
+              [1000,0,1000]*9, [1000,1000,1000]*9, 
+              [0,1000,1000]*9]
+
+    point= points[p]
+    rp = ref_p[turn]
+    box_corner = b_corner[turn]
+ 
+    result=[]
+    for y in range(len(ig_all)):    
+        x = ig_all[y] 
+        res = minimize(objective_function, x, args=(rp,), method='BFGS')
+
+        result.append(res)
+
+        if res.success == True:
+            c1 = math.dist(point,res.x[-3:])
+            pre_pre = previous
+            previous = res.x
+            break
+        
+    if all([x.success==False for x in result]) == True:
+
+        fun = [x.fun for x in result]
+        res = result[fun.index(min(fun))]
+        c1 = math.dist(point,res.x[-3:]) 
+        pre_pre = previous
+        previous = res.x
+            
+    c1_error.append(c1)
+    winners.append(result)
+    
+    
+    turn+=1    
+
+plt.hist(c1_error)
