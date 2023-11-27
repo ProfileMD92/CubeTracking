@@ -1,10 +1,4 @@
-2.1 Empty Search for cornerless cubes
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Nov  3 07:59:03 2023
-
-@author: e-mndy
-"""
+2 Empty Search for cornerless cubes
 
 import math
 import numpy as np
